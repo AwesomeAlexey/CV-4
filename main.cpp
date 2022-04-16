@@ -11,7 +11,7 @@ static inline vector<string> get_files(const string& directory);
 void PrettySpectrum(Mat& fourier);
 Mat performDFTConvolve(Mat a, Mat b, Mat c);
 Mat make_n_show_magnitude(Mat src, string prefix="", bool pretty=false);
-Mat getSpectrum(Mat src);
+Mat getSpectrum(Mat src, Mat* base = nullptr);
 Mat getLowFreq(Mat src);
 Mat getHighFreq(Mat src);
 
@@ -20,7 +20,6 @@ Mat getHighFreq(Mat src);
 
 
 int main() {
-
 
     vector<vector<int8_t>> filters = {
             {-1, -2, -1, 0, 0, 0, 1, 2, 1},
@@ -55,7 +54,7 @@ int main() {
 
             normalize(res, res, 0, 1, NORM_MINMAX);
             imshow("Res", res);
-//            waitKey(0);
+            waitKey(0);
         }
 
         destroyAllWindows();
@@ -81,14 +80,53 @@ int main() {
         imshow("Res_L", img);
         dft(high, img, DFT_INVERSE | DFT_REAL_OUTPUT);
         imshow("Res_H", img);
-//        waitKey(0);
+        waitKey(0);
 
         destroyAllWindows();
-//        break;
     }
 
 
+    Mat plate = imread("../license_plate.png", IMREAD_GRAYSCALE);
+    imshow("Plate", plate);
 
+    Mat a(plate.clone(), Rect(105, 66, 90, 120));
+    imshow("A", a);
+    Mat zero(plate.clone(), Rect(220, 40, 90, 150));
+    imshow("0", zero);
+    Mat six(plate.clone(), Rect(317, 40, 90, 150));
+    imshow("6", six);
+
+    Mat symbols[3] = {a, zero, six};
+
+    Mat plate_f = getSpectrum(plate);
+
+    for (auto symbol: symbols){
+
+        Mat temp;
+        Mat symbol_f = getSpectrum(symbol, &plate);
+        make_n_show_magnitude(plate_f, "Plate", true);
+        make_n_show_magnitude(symbol_f, "Symbol", true);
+        mulSpectrums(plate_f, symbol_f, temp, 0, true);
+        make_n_show_magnitude(temp, "Correlated", true);
+        Mat res;
+        dft(temp, res, DFT_INVERSE | DFT_REAL_OUTPUT);
+        normalize(res, res, 0, 1, NORM_MINMAX);
+        imshow("Result", res);
+        Point max_loc;
+        double max;
+
+        minMaxLoc(res, nullptr, &max, &max_loc, nullptr);
+        cout << max << endl;
+
+        threshold(res, res, max - 0.01, 255, CV_8U);
+
+        imshow("Threshold", res);
+        waitKey(0);
+
+
+    }
+
+    waitKey(0);
 
 }
 
@@ -148,7 +186,7 @@ Mat make_n_show_magnitude(Mat src, string prefix, bool pretty){
         PrettySpectrum(magn);
     }
 
-    imshow(prefix.append(" pretty magnitude"), magn);
+    imshow(prefix.append(" magnitude"), magn);
 
 
     Mat magn_hsv;
@@ -160,6 +198,35 @@ Mat make_n_show_magnitude(Mat src, string prefix, bool pretty){
 }
 
 
+
+Mat performDFTCorrelation(Mat a, Mat b){
+
+    Size dft_size;
+    dft_size.width = getOptimalDFTSize(a.cols + b.cols - 1);
+    dft_size.height = getOptimalDFTSize(a.rows + b.rows - 1);
+
+
+    Mat tempA(dft_size, a.type(), Scalar::all(0));
+    Mat tempB(dft_size, b.type(), Scalar::all(0));
+
+
+    Mat roiA(tempA, Rect(0, 0, a.cols, a.rows));
+    Mat roiB(tempB, Rect(0, 0, b.cols, b.rows));
+    a.copyTo(roiA);
+    b.copyTo(roiB);
+
+    dft(tempA, tempA, DFT_COMPLEX_OUTPUT);
+    dft(tempB, tempB, DFT_COMPLEX_OUTPUT);
+
+    mulSpectrums(tempA, tempB, tempA, 0, true);
+
+    Mat c = a.clone();
+
+    tempA(Rect(0, 0, c.cols, c.rows)).copyTo(c);
+    return c;
+
+
+}
 
 Mat performDFTConvolve(Mat a, Mat b, Mat c){
 
@@ -196,17 +263,21 @@ Mat performDFTConvolve(Mat a, Mat b, Mat c){
 
 
 
-Mat getSpectrum(Mat src){
+Mat getSpectrum(Mat src, Mat* base){
 
     Size dft_size;
-    dft_size.width = getOptimalDFTSize(src.cols);
-    dft_size.height = getOptimalDFTSize(src.rows);
-
+    if(base == nullptr) {
+        dft_size.width = getOptimalDFTSize(src.cols);
+        dft_size.height = getOptimalDFTSize(src.rows);
+    } else{
+        dft_size.width = getOptimalDFTSize(base->cols);
+        dft_size.height = getOptimalDFTSize(base->rows);
+    }
     Mat temp(dft_size, src.type(), Scalar::all(0));
 
     Mat roi(temp, Rect(0, 0, src.cols, src.rows));
     src.copyTo(roi);
-
+    temp.convertTo(temp, CV_32FC1);
     dft(temp, temp, DFT_COMPLEX_OUTPUT);
 
     return temp;
