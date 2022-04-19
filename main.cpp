@@ -28,22 +28,31 @@ int main() {
             {0, 1, 0, 1, -4, 1, 0, 1, 0}
     };
 
+    vector<string> filter_names = {
+            "Sobel-1", "Sobel-2", "Box", "Laplace"
+    };
+
     string directory = "../НужноБольшеФурье";
 
     auto files = get_files(directory);
 
+
     for (const auto& file: files){
 
         cout << file << endl;
+        auto name =  file.substr(file.find_last_of("/") + 1, file.find_last_of(".") - file.find_last_of("/") - 1);
+        filesystem::create_directory(string("../results/").append(name));
+
+        cout << name << endl;
         Mat img = imread(file, IMREAD_GRAYSCALE);
         imshow("Orig", img);
         img.convertTo(img, CV_32FC1);
 
-        for(auto filter:filters) {
+        for(auto i : {0, 1, 2, 3}) {
 
             Mat f = {
                     Size(3, 3), CV_8S,
-                    filter.data()
+                    filters[i].data()
             };
 
             f.convertTo(f, CV_32FC1);
@@ -54,7 +63,11 @@ int main() {
 
             normalize(res, res, 0, 1, NORM_MINMAX);
             imshow("Res", res);
-            waitKey(0);
+            auto res_name = string("../results/").append(name).append("/").append(filter_names[i]).append(".jpg");
+            cout << res_name << endl;
+
+            imwrite(res_name, res);
+//            waitKey(0);
         }
 
         destroyAllWindows();
@@ -76,16 +89,22 @@ int main() {
         make_n_show_magnitude(low, "After_L");
         make_n_show_magnitude(high, "After_H");
 
+        auto res_name = string("../results/").append(name).append("/");
+
         dft(low, img, DFT_INVERSE | DFT_REAL_OUTPUT);
         imshow("Res_L", img);
+        imwrite(res_name.append("LF.jpg"), img);
         dft(high, img, DFT_INVERSE | DFT_REAL_OUTPUT);
         imshow("Res_H", img);
-        waitKey(0);
+        imwrite(res_name.append("HF.jpg"), img);
+//        waitKey(0);
 
         destroyAllWindows();
     }
 
+    const string res_name = string("../results/license_plate/");
 
+    filesystem::create_directory(string("../results/license_plate"));
     Mat plate = imread("../license_plate.png", IMREAD_GRAYSCALE);
     imshow("Plate", plate);
 
@@ -98,20 +117,24 @@ int main() {
 
     Mat symbols[3] = {a, zero, six};
 
+    vector<string> sbs = {"A", "Zero", "Six"};
+
     Mat plate_f = getSpectrum(plate);
 
-    for (auto symbol: symbols){
+    for (const auto& i: {0, 1, 2}){
 
         Mat temp;
-        Mat symbol_f = getSpectrum(symbol, &plate);
-        make_n_show_magnitude(plate_f, "Plate", true);
-        make_n_show_magnitude(symbol_f, "Symbol", true);
+        Mat symbol_f = getSpectrum(symbols[i], &plate);
+        imwrite(string(res_name).append("Plate-Magnitude.jpg"), make_n_show_magnitude(plate_f, "Plate", true));
+        imwrite(string(res_name).append(sbs[i]).append("-Magnitude.jpg"), (make_n_show_magnitude(symbol_f, "Symbol", true)));
         mulSpectrums(plate_f, symbol_f, temp, 0, true);
-        make_n_show_magnitude(temp, "Correlated", true);
+        imwrite(string(res_name).append(sbs[i]).append("-CorretationMagnitude.jpg"), make_n_show_magnitude(temp, "Correlated", true));
         Mat res;
         dft(temp, res, DFT_INVERSE | DFT_REAL_OUTPUT);
         normalize(res, res, 0, 1, NORM_MINMAX);
         imshow("Result", res);
+        imwrite(string(res_name).append(sbs[i]).append("-Correlation.jpg"), res);
+
         Point max_loc;
         double max;
 
@@ -121,6 +144,8 @@ int main() {
         threshold(res, res, max - 0.01, 255, CV_8U);
 
         imshow("Threshold", res);
+        imwrite(string(res_name).append(sbs[i]).append("-Threshold.jpg"), res);
+
         waitKey(0);
 
 
